@@ -5,19 +5,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Juegos Random</title>
   <style>
+    /* ====== ESTILOS GENERALES ====== */
     body {
       margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #fff;
+      overflow-x: hidden;
+    }
+
+    section {
       height: 100vh;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      font-family: Arial, Helvetica, sans-serif;
+      text-align: center;
+      scroll-snap-align: start;
+    }
+
+    /* ====== NAV ====== */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0,0,0,0.6);
+      padding: 12px;
+      z-index: 10;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      backdrop-filter: blur(4px);
+    }
+
+    nav a {
+      color: #fff;
+      text-decoration: none;
+      font-weight: bold;
+      padding: 8px 16px;
+      border-radius: 8px;
+      transition: background 0.3s;
+    }
+
+    nav a:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    /* ====== INICIO ====== */
+    #inicio {
       background: linear-gradient(135deg, #4facfe, #00f2fe, #43e97b);
       background-size: 400% 400%;
       animation: gradient 12s ease infinite;
-      color: #fff;
-      text-align: center;
     }
 
     @keyframes gradient {
@@ -26,13 +64,13 @@
       100% { background-position: 0% 50%; }
     }
 
-    h1 {
+    #inicio h1 {
       font-size: 2.5rem;
       margin-bottom: 30px;
       text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.3);
     }
 
-    a {
+    #inicio a {
       text-decoration: none;
       padding: 15px 30px;
       font-size: 1.2rem;
@@ -45,15 +83,210 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     }
 
-    a:hover {
+    #inicio a:hover {
       background: rgba(255, 255, 255, 0.2);
       transform: scale(1.08);
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     }
+
+    /* ====== JUEGO ====== */
+    #juego {
+      background: #000;
+      position: relative;
+      overflow: hidden;
+    }
+
+    canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1; /* detrás de la estrella */
+    }
+
+    #info {
+      position: fixed;
+      top: 60px; /* debajo del nav */
+      left: 10px;
+      z-index: 2;
+    }
+
+    #contador, #record {
+      font-size: 20px;
+      margin-bottom: 5px;
+    }
+
+    #estrella {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      cursor: pointer;
+      z-index: 3; /* encima de todo */
+    }
   </style>
 </head>
 <body>
-  <h1>Juegos Random (Beta)</h1>
-  <a href="inicio.html">Start Tic</a>
+  <!-- NAV -->
+  <nav>
+    <a href="#inicio">Inicio</a>
+    <a href="#juego">Juego</a>
+  </nav>
+
+  <!-- INICIO -->
+  <section id="inicio">
+    <h1>Juegos Random (Beta)</h1>
+    <a href="#juego">Ir al Juego</a>
+  </section>
+
+  <!-- JUEGO -->
+  <section id="juego">
+    <canvas id="fondo"></canvas>
+
+    <div id="info">
+      <div id="contador">Clics: 0</div>
+      <div id="record">Máximo: 0</div>
+    </div>
+
+    <img id="estrella" src="estrelladeprueb.png" alt="Estrella" />
+  </section>
+
+  <!-- SCRIPT DEL JUEGO -->
+  <script>
+    const canvas = document.getElementById("fondo");
+    const ctx = canvas.getContext("2d");
+    const estrella = document.getElementById("estrella");
+    const contadorDiv = document.getElementById("contador");
+    const recordDiv = document.getElementById("record");
+
+    let clics = 0;
+    let record = parseInt(localStorage.getItem("recordEstrella")) || 0;
+    let activo = false;
+    let timeout;
+
+    recordDiv.textContent = `Máximo: ${record}`;
+
+    // Ajustar canvas
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    // Estrellas del fondo
+    let estrellas = Array.from({ length: 120 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      r: Math.random() * 2 + 1,
+      vel: Math.random() * 0.5 + 0.2,
+      alpha: Math.random(),
+      delta: (Math.random() * 0.02) - 0.01
+    }));
+
+    // Chispas
+    let chispas = [];
+    function crearChispas(x, y, cantidad) {
+      for (let i = 0; i < cantidad; i++) {
+        const ang = Math.random() * 2 * Math.PI;
+        const vel = Math.random() * 3 + 1;
+        chispas.push({
+          x, y,
+          vx: Math.cos(ang) * vel,
+          vy: Math.sin(ang) * vel,
+          vida: 1,
+          radio: Math.random() * 3 + 2
+        });
+      }
+    }
+
+    // Animación
+    function dibujar() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Fondo estrellado
+      estrellas.forEach(est => {
+        est.alpha += est.delta;
+        if (est.alpha <= 0 || est.alpha >= 1) est.delta *= -1;
+
+        ctx.fillStyle = `rgba(255,255,255,${est.alpha})`;
+        ctx.beginPath();
+        ctx.arc(est.x, est.y, est.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        est.y += est.vel;
+        if (est.y > canvas.height) {
+          est.y = 0;
+          est.x = Math.random() * canvas.width;
+        }
+      });
+
+      // Chispas
+      chispas.forEach((c, i) => {
+        ctx.fillStyle = `rgba(255,215,0,${c.vida})`;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.radio, 0, Math.PI * 2);
+        ctx.fill();
+
+        c.x += c.vx;
+        c.y += c.vy;
+        c.vida -= 0.02;
+        if (c.vida <= 0) chispas.splice(i, 1);
+      });
+
+      requestAnimationFrame(dibujar);
+    }
+    dibujar();
+
+    // Juego
+    function moverEstrella() {
+      const maxX = window.innerWidth - estrella.offsetWidth;
+      const maxY = window.innerHeight - estrella.offsetHeight;
+      estrella.style.left = `${Math.random() * maxX}px`;
+      estrella.style.top = `${Math.random() * maxY}px`;
+    }
+
+    function actualizarContador() {
+      contadorDiv.textContent = `Clics: ${clics}`;
+    }
+
+    function actualizarRecord() {
+      if (clics > record) {
+        record = clics;
+        localStorage.setItem("recordEstrella", record);
+        recordDiv.textContent = `Máximo: ${record}`;
+      }
+    }
+
+    function iniciarJuego() {
+      actualizarRecord();
+      clics = 0;
+      actualizarContador();
+      activo = false;
+      clearTimeout(timeout);
+      moverEstrella();
+    }
+
+    estrella.addEventListener("click", (e) => {
+      e.stopPropagation();
+
+      clics++;
+      actualizarContador();
+      moverEstrella();
+
+      crearChispas(e.clientX, e.clientY, 20);
+
+      if (!activo) activo = true;
+
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        iniciarJuego();
+      }, 1000);
+    });
+
+    document.body.addEventListener("click", () => {
+      if (activo) iniciarJuego();
+    });
+
+    window.onload = moverEstrella;
+  </script>
 </body>
 </html>
